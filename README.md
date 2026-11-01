@@ -16,7 +16,34 @@ All binaries are compiled from upstream Agave release tags.
 
 ## Installation
 
-### 1. Download
+### Quick install (latest release)
+
+On **Linux ARM64 (aarch64)**, run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/paoloanzn/agave-arm64-builds/main/install.sh | bash
+```
+
+The [installer](install.sh) downloads the latest GitHub Release, verifies its SHA-256 checksum, and installs `solana`, `solana-keygen`, and `solana-test-validator` to `~/.local/bin` without `sudo`. It requires `curl`, `tar`, `sha256sum`, and standard Linux utilities.
+
+If `~/.local/bin` is not yet in your shell's `PATH`, run:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+Verify:
+
+```bash
+solana --version
+solana-test-validator --version
+```
+
+To use a different installation directory, set `AGAVE_INSTALL_DIR` before running the installer.
+
+### Manual installation
+
+#### 1. Download
 
 Navigate to the [Releases](../../releases) page and download the archive for your desired Agave version.
 
@@ -27,7 +54,7 @@ agave-v4.4.0-linux-arm64.tar.gz
 agave-v4.4.0-linux-arm64.tar.gz.sha256
 ```
 
-### 2. Verify and extract
+#### 2. Verify and extract
 
 Verify the downloaded archive:
 
@@ -41,7 +68,7 @@ Extract the binaries:
 tar -xzf agave-v4.4.0-linux-arm64.tar.gz
 ```
 
-### 3. Install
+#### 3. Install
 
 ```bash
 sudo install -m755 \
