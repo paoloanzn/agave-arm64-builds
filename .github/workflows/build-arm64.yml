@@ -1,0 +1,150 @@
+
+name: Build Agave ARM64
+
+on:
+  workflow_dispatch:
+    inputs:
+      agave_tag:
+        description: "Agave release tag"
+        required: true
+        default: "v4.4.0"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Linux ARM64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 360
+
+    env:
+      AGAVE_TAG: ${{ inputs.agave_tag }}
+      CARGO_BUILD_JOBS: "2"
+      CARGO_INCREMENTAL: "0"
+      CARGO_PROFILE_RELEASE_DEBUG: "0"
+      CARGO_PROFILE_RELEASE_LTO: "off"
+
+    steps:
+      - name: Checkout Agave
+        uses: actions/checkout@v4
+        with:
+          repository: anza-xyz/agave
+          ref: ${{ inputs.agave_tag }}
+          persist-credentials: false
+
+      - name: Check architecture and disk
+        run: |
+          uname -m
+          df -h .
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libssl-dev \
+            libudev-dev \
+            zlib1g-dev \
+            llvm \
+            clang \
+            libclang-dev \
+            cmake \
+            libprotobuf-dev \
+            protobuf-compiler
+
+      - name: Install Rust toolchain
+        run: |
+          TOOLCHAIN=$(sed -n \
+            's/^channel = "\(.*\)"/\1/p' \
+            rust-toolchain.toml)
+
+          rustup toolchain install \
+            "$TOOLCHAIN" --profile minimal
+
+          rustc --version
+          cargo --version
+
+      - name: Build binaries
+        run: |
+          cargo build --release --locked \
+            -p agave-validator \
+            --bin solana-test-validator
+
+          cargo build --release --locked \
+            -p solana-cli \
+            --bin solana
+
+          cargo build --release --locked \
+            -p solana-keygen \
+            --bin solana-keygen
+
+      - name: Verify binaries
+        run: |
+          file target/release/solana*
+          target/release/solana --version
+          target/release/solana-keygen --version
+          target/release/solana-test-validator --version
+
+      - name: Package binaries
+        run: |
+          mkdir -p dist/agave-linux-arm64/bin
+
+          cp target/release/solana \
+            dist/agave-linux-arm64/bin/
+
+          cp target/release/solana-keygen \
+            dist/agave-linux-arm64/bin/
+
+          cp target/release/solana-test-validator \
+            dist/agave-linux-arm64/bin/
+
+          {
+            echo "Agave tag: $AGAVE_TAG"
+            echo "Source commit: $(git rev-parse HEAD)"
+            echo "Architecture: $(uname -m)"
+          } > dist/agave-linux-arm64/BUILDINFO.txt
+
+          tar -czf \
+            "dist/agave-${AGAVE_TAG}-linux-arm64.tar.gz" \
+            -C dist agave-linux-arm64
+
+          cd dist
+          sha256sum \
+            "agave-${AGAVE_TAG}-linux-arm64.tar.gz" \
+            > "agave-${AGAVE_TAG}-linux-arm64.tar.gz.sha256"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agave-linux-arm64
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          retention-days: 30
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          RELEASE_TAG="agave-${AGAVE_TAG}-linux-arm64"
+
+          if ! gh release view "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            > /dev/null 2>&1; then
+
+            gh release create "$RELEASE_TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "Agave $AGAVE_TAG Linux ARM64" \
+              --notes "Unofficial ARM64 build from anza-xyz/agave $AGAVE_TAG."
+          fi
+
+          gh release upload "$RELEASE_TAG" \
+            "dist/agave-${AGAVE_TAG}-linux-arm64.tar.gz" \
+            "dist/agave-${AGAVE_TAG}-linux-arm64.tar.gz.sha256" \
+            --clobber \
+            --repo "$GITHUB_REPOSITORY"
+
