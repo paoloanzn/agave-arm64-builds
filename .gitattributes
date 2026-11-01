@@ -1,2 +1,1 @@
-.github/workflows/*.yml linguist-language=YAML linguist-detectable -linguist-vendored
-.github/workflows/*.yaml linguist-language=YAML linguist-detectable -linguist-vendored
+
